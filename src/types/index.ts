@@ -40,6 +40,10 @@ export interface Environment {
   BLOCK_POLICY?: string;
   /** Mail cache TTL in seconds. Default: 1 day */
   MAIL_TTL?: string;
+  /** Show the email body directly in the Discord embed. Default: false */
+  SHOW_BODY?: string;
+  /** Max characters of the body to embed when SHOW_BODY is on. Default: 1000 */
+  SHOW_BODY_MAX_CHARS?: string;
   /** Workers domain, e.g. project.account.workers.dev */
   DOMAIN?: string;
   /** Max email size in bytes. Default: 512*1024 */

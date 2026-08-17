@@ -40,6 +40,17 @@ export async function renderEmailListMode(mail: EmailCache, env: Environment): P
     footer: { text: `Message-ID: ${mail.messageId.slice(0, 64)}` },
   };
 
+  // Optional: inline body preview in the embed itself
+  if (env.SHOW_BODY === 'true') {
+    const maxChars = Math.max(100, Math.min(Number.parseInt(env.SHOW_BODY_MAX_CHARS || '', 10) || 1000, DISCORD_EMBED_LIMIT));
+    const body = (mail.text || '').trim();
+    if (body) {
+      embed.description = body.length > maxChars
+        ? `${body.slice(0, maxChars)}\n[…] truncated — use Text/Preview for the full mail`
+        : body;
+    }
+  }
+
   const buttons: DiscordActionRow['components'] = [];
   if (interactive) {
     buttons.push({ type: 2, style: 1, label: 'Preview', custom_id: `p:${mail.id}` });

@@ -46,6 +46,8 @@ export interface Environment {
   SHOW_BODY?: string;
   /** Max characters of the body to embed when SHOW_BODY is on. Default: 1000 */
   SHOW_BODY_MAX_CHARS?: string;
+  /** Show a preview URL link (web reading page) in the embed for webhook mode. Default: false */
+  SHOW_PREVIEW_URL?: string;
   /** Workers domain, e.g. project.account.workers.dev */
   DOMAIN?: string;
   /** Max email size in bytes. Default: 512*1024 */
@@ -84,6 +86,8 @@ export interface DiscordEmbedField {
 
 export interface DiscordEmbed {
   title?: string;
+  /** URL the embed title links to (e.g. the preview page) */
+  url?: string;
   description?: string;
   color?: number;
   footer?: DiscordEmbedFooter;

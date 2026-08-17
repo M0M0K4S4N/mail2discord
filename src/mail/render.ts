@@ -58,6 +58,11 @@ export async function renderEmailListMode(mail: EmailCache, env: Environment): P
       buttons.push({ type: 2, style: 1, label: 'Summary', custom_id: `s:${mail.id}` });
     }
   }
+  // Optional: preview URL as a plain link in the embed (webhook mode — no button needed)
+  if (!interactive && env.SHOW_PREVIEW_URL === 'true' && DOMAIN) {
+    embed.url = `https://${DOMAIN}/email/${mail.id}?mode=preview`;
+    embed.fields!.push({ name: 'Preview', value: `[Open in browser ↗](${embed.url})` });
+  }
   if (mail.text && DOMAIN) {
     buttons.push({ type: 2, style: 5, label: 'Text', url: `https://${DOMAIN}/email/${mail.id}?mode=text` });
   }

@@ -64,6 +64,8 @@ async function main() {
     MAIL_TTL: '3600',
     SHOW_BODY: process.env.SHOW_BODY,
     SHOW_BODY_MAX_CHARS: process.env.SHOW_BODY_MAX_CHARS,
+    SHOW_PREVIEW_URL: process.env.SHOW_PREVIEW_URL,
+    DOMAIN: process.env.DOMAIN,
     DB: kv,
   };
 

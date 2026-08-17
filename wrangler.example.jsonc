@@ -18,6 +18,7 @@
     // "MAIL_TTL": "86400",
     // "SHOW_BODY": "true",
     // "SHOW_BODY_MAX_CHARS": "1000",
+    // "SHOW_PREVIEW_URL": "true",
     // "MAX_EMAIL_SIZE": "524288",
     // "MAX_EMAIL_SIZE_POLICY": "truncate",
     // "GUARDIAN_MODE": "false",

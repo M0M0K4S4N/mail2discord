@@ -193,7 +193,7 @@ async function handleMailButton(interaction: DiscordInteraction, env: Environmen
   return json({ type: 7, data: payload });
 }
 
-/** GET /email/:id?mode=text|html — view the cached email body. */
+/** GET /email/:id?mode=text|html|preview — view the cached email body. */
 export async function emailViewHandler(request: Request, env: Environment, id: string): Promise<Response> {
   const dao = new Dao(env.DB);
   const mail = await dao.loadMailCache(id);
@@ -206,9 +206,63 @@ export async function emailViewHandler(request: Request, env: Environment, id: s
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
+  if (mode === 'preview') {
+    return new Response(wrapPreview(mail), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  }
   return new Response(mail.text || 'No text content', {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
   });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+function wrapPreview(mail: EmailCache): string {
+  const body = escapeHtml(mail.text || 'No text content');
+  const htmlLink = mail.html ? `?mode=html` : '';
+  const textLink = `?mode=text`;
+  return `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>${escapeHtml(mail.subject || '(no subject)')}</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Thai", sans-serif; background: #f2f3f5; color: #1e1f22; }
+  main { max-width: 680px; margin: 24px auto; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  @media (prefers-color-scheme: dark) { body { background: #1a1b1e; } main { background: #2b2d31; color: #dbdee1; } }
+  h1 { font-size: 1.25rem; margin: 0 0 12px; word-break: break-word; }
+  .meta { font-size: .85rem; color: #888; margin-bottom: 20px; line-height: 1.6; }
+  .meta code { background: rgba(135,135,135,.15); padding: 1px 6px; border-radius: 4px; }
+  .body { font-size: .95rem; line-height: 1.7; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .links { margin-top: 24px; font-size: .85rem; }
+  .links a { color: #5865F2; margin-right: 16px; }
+  .warning { color: #b5b8bb; font-size: .75rem; margin-top: 32px; border-top: 1px solid #3f4147; padding-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>📭 ${escapeHtml(mail.subject || '(no subject)')}</h1>
+  <div class="meta">
+    <div>From: <code>${escapeHtml(mail.from)}</code></div>
+    <div>To: <code>${escapeHtml(mail.to)}</code></div>
+    <div>Message-ID: <code>${escapeHtml(mail.messageId)}</code></div>
+  </div>
+  <div class="body">${body}</div>
+  <div class="links">
+    <a href="${textLink}">View raw text</a>${htmlLink ? `<a href="${htmlLink}">View original HTML</a>` : ''}
+  </div>
+  <div class="warning">⚠️ This preview is rendered as plain text and fully escaped — links and scripts in the original mail are inert. The cache expires per MAIL_TTL.</div>
+</main>
+</body>
+</html>`;
 }
 
 function wrapHtml(mail: EmailCache): string {

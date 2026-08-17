@@ -1,0 +1,36 @@
+{
+  "name": "mail2discord",
+  "version": "1.0.0",
+  "description": "Forward email to Discord with Cloudflare Email Routing",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "deploy": "npm run build && wrangler deploy",
+    "dev": "wrangler dev --email",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cloudflare",
+    "cloudflare-email-routing",
+    "cloudflare-workers",
+    "discord",
+    "discord-bot",
+    "email",
+    "serverless"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "html-to-text": "^10.0.0",
+    "postal-mime": "^2.4.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

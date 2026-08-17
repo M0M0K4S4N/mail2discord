@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mail2discord",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  // Deploy via: npm run deploy (or copy-paste build/index.js in the dashboard)
+  "vars": {
+    // "DISCORD_TOKEN": "your-bot-token",
+    // "DISCORD_CHANNEL_ID": "123456789012345678",
+    // "DISCORD_WEBHOOK_URL": "https://discord.com/api/webhooks/...",
+    // "DISCORD_PUBLIC_KEY": "hex public key of your Discord application",
+    // "DOMAIN": "mail2discord.yourname.workers.dev",
+    // "FORWARD_LIST": "",
+    // "BLOCK_LIST": "[]",
+    // "WHITE_LIST": "[]",
+    // "BLOCK_POLICY": "discord",
+    // "MAIL_TTL": "86400",
+    // "MAX_EMAIL_SIZE": "524288",
+    // "MAX_EMAIL_SIZE_POLICY": "truncate",
+    // "GUARDIAN_MODE": "false",
+    // "OPENAI_API_KEY": "",
+    // "OPENAI_CHAT_MODEL": "gpt-4o-mini",
+    // "SUMMARY_TARGET_LANG": "english"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "DB",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ]
+}

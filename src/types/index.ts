@@ -28,6 +28,8 @@ export interface Environment {
   DISCORD_WEBHOOK_URL?: string;
   /** Public key of the Discord application, for verifying interaction signatures */
   DISCORD_PUBLIC_KEY?: string;
+  /** Shared secret required to call /init (bot mode). /init is disabled when unset */
+  INIT_SECRET?: string;
   /** Comma-separated backup email addresses to forward raw mail to */
   FORWARD_LIST?: string;
   /** Sender block list: JSON array string of addresses or regex patterns */

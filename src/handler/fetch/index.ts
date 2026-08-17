@@ -15,10 +15,30 @@ function errorResponse(message: string, status = 500): Response {
   return json({ error: message }, status);
 }
 
-/** POST|GET /init — register slash commands and sanity-check the bot token. */
+/** Constant-time string comparison to avoid timing leaks on secrets. */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/** POST|GET /init?secret=... — register slash commands and sanity-check the bot token. */
 export async function initHandler(request: Request, env: Environment): Promise<Response> {
   if (request.method !== 'POST' && request.method !== 'GET') {
     return errorResponse('Method not allowed', 405);
+  }
+  const secret = env.INIT_SECRET;
+  if (!secret) {
+    return errorResponse('/init is disabled: set INIT_SECRET to enable this endpoint', 403);
+  }
+  const provided = new URL(request.url).searchParams.get('secret') || request.headers.get('x-init-secret') || '';
+  if (!timingSafeEqual(secret, provided)) {
+    return errorResponse('Invalid secret', 401);
   }
   const token = env.DISCORD_TOKEN;
   if (!token) {
@@ -48,11 +68,16 @@ export async function discordInteractionHandler(request: Request, env: Environme
   const timestamp = request.headers.get('x-signature-timestamp');
   const body = await request.text();
 
-  if (env.DISCORD_PUBLIC_KEY) {
-    const valid = await verifyDiscordSignature(env.DISCORD_PUBLIC_KEY, signature || '', timestamp || '', body);
-    if (!valid) {
-      return errorResponse('Invalid request signature', 401);
-    }
+  // Interactions MUST be verified with the app's public key (Ed25519).
+  // Webhook mode never receives interactions, so without a configured key we
+  // reject everything instead of accepting unverified requests.
+  const publicKey = env.DISCORD_PUBLIC_KEY;
+  if (!publicKey) {
+    return errorResponse('Interactions disabled: DISCORD_PUBLIC_KEY is not set', 401);
+  }
+  const valid = await verifyDiscordSignature(publicKey, signature || '', timestamp || '', body);
+  if (!valid) {
+    return errorResponse('Invalid request signature', 401);
   }
 
   const interaction = JSON.parse(body) as DiscordInteraction;

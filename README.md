@@ -1,5 +1,7 @@
 # mail2discord
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/M0M0K4S4N/mail2discord)
+
 Use a Discord bot (or plain webhook) to get your temporary email.
 
 `mail2discord` is a [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/) Worker that converts incoming emails into rich Discord messages — a Discord-flavored take on [TBXark/mail2telegram](https://github.com/TBXark/mail2telegram), written from scratch.

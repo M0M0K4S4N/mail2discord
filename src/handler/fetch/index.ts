@@ -2,6 +2,7 @@ import type { DiscordInteraction, EmailCache, Environment, DiscordMessagePayload
 import { Dao } from '../../db';
 import { checkAddressStatus } from '../../mail/check';
 import { renderEmailDebugMode, renderEmailListMode, renderEmailPreviewMode, renderEmailSummaryMode } from '../../mail/render';
+import { formatBytes } from '../../mail/attachments';
 import { editInteractionOriginal, registerApplicationCommands, fetchBotUser } from '../../discord/api';
 import { verifyDiscordSignature } from '../../discord/verify';
 
@@ -193,14 +194,42 @@ async function handleMailButton(interaction: DiscordInteraction, env: Environmen
   return json({ type: 7, data: payload });
 }
 
-/** GET /email/:id?mode=text|html|preview — view the cached email body. */
+/** GET /email/:id?mode=text|html|preview — view the cached email body.
+ *  GET /email/:id?att=N — download the Nth stored attachment. */
 export async function emailViewHandler(request: Request, env: Environment, id: string): Promise<Response> {
   const dao = new Dao(env.DB);
+  const url = new URL(request.url);
+  const attParam = url.searchParams.get('att');
+  if (attParam !== null) {
+    const mail = await dao.loadMailCache(id);
+    if (!mail) {
+      return new Response('Email not found or expired (MAIL_TTL).', { status: 404 });
+    }
+    const index = Number.parseInt(attParam, 10);
+    const meta = mail.attachments?.[index];
+    if (!Number.isInteger(index) || index < 0 || !meta) {
+      return new Response('Attachment not found.', { status: 404 });
+    }
+    const content = await dao.loadAttachment(id, index);
+    if (!content) {
+      return new Response('Attachment content expired (MAIL_TTL) or not found.', { status: 404 });
+    }
+    // attachment + nosniff: never render inline — downloaded/stored files must not execute
+    const safeName = meta.filename.replace(/[^\w.\-]/g, '_').replace(/^\.+/, '_');
+    return new Response(content, {
+      headers: {
+        'Content-Type': meta.mimeType || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${safeName}"`,
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
   const mail = await dao.loadMailCache(id);
   if (!mail) {
     return new Response('Email not found or expired (MAIL_TTL).', { status: 404 });
   }
-  const mode = new URL(request.url).searchParams.get('mode') || 'text';
+  const mode = url.searchParams.get('mode') || 'text';
   if (mode === 'html') {
     return new Response(wrapHtml(mail), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -226,6 +255,24 @@ function wrapPreview(mail: EmailCache): string {
   const body = escapeHtml(mail.text || 'No text content');
   const htmlLink = mail.html ? `?mode=html` : '';
   const textLink = `?mode=text`;
+  const attachments = (mail.attachments || []).map((att, i) => {
+    const name = escapeHtml(att.filename);
+    const size = formatBytes(att.size);
+    return `<li><a href="?att=${i}" download>${name}</a> <span class="att-meta">${escapeHtml(att.mimeType)} · ${size}</span></li>`;
+  }).join('\n    ');
+  const attachmentSection = attachments
+    ? `\n  <div class="attachments">\n    <h2>📎 Attachments</h2>\n    <ul>\n    ${attachments}\n    </ul>\n  </div>`
+    : '';
+  const skippedAttachments = (mail.skippedAttachments || []).map(s => {
+    const name = escapeHtml(s.filename);
+    return `<li>${name} <span class="att-meta">${escapeHtml(s.mimeType)} · ${formatBytes(s.size)} — not stored (${escapeHtml(s.reason)})</span></li>`;
+  }).join('\n    ');
+  const skippedSection = skippedAttachments
+    ? `\n  <div class="attachments skipped">\n    <h2>📎 Skipped attachments</h2>\n    <ul>\n    ${skippedAttachments}\n    </ul>\n  </div>`
+    : '';
+  const truncatedNote = mail.truncated
+    ? `\n  <div class="warning">⚠️ The raw email exceeded MAX_EMAIL_SIZE and was truncated — attachments may be incomplete.</div>`
+    : '';
   return `<!DOCTYPE html>
 <html lang="th">
 <head>
@@ -239,9 +286,16 @@ function wrapPreview(mail: EmailCache): string {
   main { max-width: 680px; margin: 24px auto; padding: 24px; background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
   @media (prefers-color-scheme: dark) { body { background: #1a1b1e; } main { background: #2b2d31; color: #dbdee1; } }
   h1 { font-size: 1.25rem; margin: 0 0 12px; word-break: break-word; }
+  h2 { font-size: 1rem; margin: 0 0 8px; }
   .meta { font-size: .85rem; color: #888; margin-bottom: 20px; line-height: 1.6; }
   .meta code { background: rgba(135,135,135,.15); padding: 1px 6px; border-radius: 4px; }
   .body { font-size: .95rem; line-height: 1.7; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .attachments { margin-top: 24px; font-size: .9rem; }
+  .attachments ul { list-style: none; margin: 0; padding: 0; }
+  .attachments li { padding: 6px 0; border-bottom: 1px solid rgba(135,135,135,.2); }
+  .attachments li:last-child { border-bottom: none; }
+  .attachments a { color: #5865F2; }
+  .att-meta { color: #888; font-size: .8rem; margin-left: 8px; }
   .links { margin-top: 24px; font-size: .85rem; }
   .links a { color: #5865F2; margin-right: 16px; }
   .warning { color: #b5b8bb; font-size: .75rem; margin-top: 32px; border-top: 1px solid #3f4147; padding-top: 12px; }
@@ -256,9 +310,11 @@ function wrapPreview(mail: EmailCache): string {
     <div>Message-ID: <code>${escapeHtml(mail.messageId)}</code></div>
   </div>
   <div class="body">${body}</div>
+${attachmentSection}${skippedSection}
   <div class="links">
     <a href="${textLink}">View raw text</a>${htmlLink ? `<a href="${htmlLink}">View original HTML</a>` : ''}
   </div>
+${truncatedNote}
   <div class="warning">⚠️ This preview is rendered as plain text and fully escaped — links and scripts in the original mail are inert. The cache expires per MAIL_TTL.</div>
 </main>
 </body>

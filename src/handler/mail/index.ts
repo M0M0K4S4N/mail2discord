@@ -1,17 +1,20 @@
 import type { ForwardableEmailMessage } from '@cloudflare/workers-types';
-import type { EmailCache, Environment } from '../../types';
+import type { EmailCache, Environment, StoredAttachment } from '../../types';
 import { Dao } from '../../db';
 import { isMessageBlock } from '../../mail/check';
 import { parseEmail } from '../../mail/parse';
 import { renderEmailListMode } from '../../mail/render';
-import { createChannelMessage, executeWebhook } from '../../discord/api';
+import { createChannelMessage, createChannelMessageWithFiles, executeWebhook, executeWebhookWithFiles } from '../../discord/api';
 
-export async function sendMailToDiscord(mail: EmailCache, env: Environment): Promise<string[]> {
+export async function sendMailToDiscord(mail: EmailCache, env: Environment, files: StoredAttachment[] = []): Promise<string[]> {
   const payload = await renderEmailListMode(mail, env);
   const messageIDs: string[] = [];
+  const upload = env.DISCORD_UPLOAD_ATTACHMENTS === 'true' && files.length > 0;
 
   if (env.DISCORD_WEBHOOK_URL) {
-    const msg = await executeWebhook(env.DISCORD_WEBHOOK_URL, payload);
+    const msg = upload
+      ? await executeWebhookWithFiles(env.DISCORD_WEBHOOK_URL, payload, files.map(toUploadFile))
+      : await executeWebhook(env.DISCORD_WEBHOOK_URL, payload);
     messageIDs.push(msg.id);
     return messageIDs;
   }
@@ -22,10 +25,16 @@ export async function sendMailToDiscord(mail: EmailCache, env: Environment): Pro
     throw new Error('No Discord destination configured: set DISCORD_WEBHOOK_URL or DISCORD_TOKEN + DISCORD_CHANNEL_ID');
   }
   for (const channelId of channelIds) {
-    const msg = await createChannelMessage(token, channelId, payload);
+    const msg = upload
+      ? await createChannelMessageWithFiles(token, channelId, payload, files.map(toUploadFile))
+      : await createChannelMessage(token, channelId, payload);
     messageIDs.push(msg.id);
   }
   return messageIDs;
+}
+
+function toUploadFile(file: StoredAttachment): { name: string; content: ArrayBuffer; contentType?: string } {
+  return { name: file.filename, content: file.content, contentType: file.mimeType };
 }
 
 export async function emailHandler(message: ForwardableEmailMessage, env: Environment): Promise<void> {
@@ -83,9 +92,16 @@ export async function emailHandler(message: ForwardableEmailMessage, env: Enviro
       const ttl = Number.parseInt(MAIL_TTL || '', 10) || 60 * 60 * 24;
       const maxSize = Number.parseInt(MAX_EMAIL_SIZE || '', 10) || 512 * 1024;
       const maxSizePolicy = MAX_EMAIL_SIZE_POLICY || 'truncate';
-      const mail = await parseEmail(message, maxSize, maxSizePolicy);
+      const mail = await parseEmail(message, maxSize, maxSizePolicy, {
+        enabled: env.ATTACHMENTS !== 'false',
+        maxSize: Number.parseInt(env.MAX_ATTACHMENT_SIZE || '', 10) || undefined,
+        maxCount: Number.parseInt(env.MAX_ATTACHMENT_COUNT || '', 10) || undefined,
+      });
       await dao.saveMailCache(mail.id, mail, ttl);
-      const msgIDs = await sendMailToDiscord(mail, env);
+      for (const att of mail.attachmentFiles) {
+        await dao.saveAttachment(mail.id, att, ttl);
+      }
+      const msgIDs = await sendMailToDiscord(mail, env, mail.attachmentFiles);
       for (const msgID of msgIDs) {
         await dao.saveMessageIDToMailID(`${msgID}`, mail.id, ttl);
       }

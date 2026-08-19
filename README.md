@@ -98,6 +98,10 @@ Location: Workers & Pages → your worker → Settings → Variables
 | `OPENAI_COMPLETIONS_API` | Default `https://api.openai.com/v1/chat/completions` |
 | `OPENAI_CHAT_MODEL` | Default `gpt-4o-mini` |
 | `SUMMARY_TARGET_LANG` | Default `english` (e.g. `thai`) |
+| `ATTACHMENTS` | Set `false` to keep attachment metadata only. Default: enabled |
+| `MAX_ATTACHMENT_SIZE` | Max bytes per stored attachment. Default `8388608` (8 MiB) |
+| `MAX_ATTACHMENT_COUNT` | Max stored attachments per mail. Default `10` |
+| `DISCORD_UPLOAD_ATTACHMENTS` | `true` to upload attachments as Discord files with the notification. Default: links only |
 | `GUARDIAN_MODE` | `true` to dedupe retried deliveries (more KV writes) |
 | `DEBUG` | `true` adds a `Debug` button |
 | `DB` | KV binding — **Variable name must be `DB`** |
@@ -132,7 +136,14 @@ List rules: whitelist wins over blocklist; entries match exact (case-insensitive
 
 ## Attachments
 
-Not supported (same as the original). Forward mail to a real inbox via `FORWARD_LIST` if you need attachments.
+Attachments are extracted (postal-mime) and stored per-mail in KV alongside the cache:
+
+- The notification embed gets an **📎 Attachments** field with size + download links (`https://<DOMAIN>/email/<id>?att=N`, dies with `MAIL_TTL`)
+- The web preview page lists every attachment with download links
+- `DISCORD_UPLOAD_ATTACHMENTS=true` uploads the files themselves as Discord attachments (multipart), so they live in Discord even after the cache expires — same limits as a normal message (8 MiB each, 10 total by default, tunable via `MAX_ATTACHMENT_SIZE` / `MAX_ATTACHMENT_COUNT`)
+- Inline / related parts (cid images, tracking pixels) are **not** stored; they are listed under 📎 Skipped with the reason. Set `ATTACHMENTS=false` to keep metadata only
+- Downloads are served with `Content-Disposition: attachment` + `nosniff` — files are never rendered or executed by the browser
+- Truncated mail (see `MAX_EMAIL_SIZE_POLICY`) is flagged in the embed: attachments may be incomplete
 
 ## Local development
 

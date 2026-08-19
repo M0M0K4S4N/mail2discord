@@ -1,5 +1,5 @@
 import type { KVNamespace } from '@cloudflare/workers-types';
-import type { EmailCache, EmailHandleStatus } from '../types';
+import type { EmailCache, EmailHandleStatus, StoredAttachment } from '../types';
 
 export type AddressListStoreKey = 'BLOCK_LIST' | 'WHITE_LIST';
 
@@ -77,6 +77,15 @@ export class Dao {
 
   async saveMailCache(id: string, cache: EmailCache, ttl?: number): Promise<void> {
     await this.db.put(`Mail:${id}`, JSON.stringify(cache), { expirationTtl: ttl });
+  }
+
+  async saveAttachment(mailId: string, att: StoredAttachment, ttl?: number): Promise<void> {
+    await this.db.put(`Att:${mailId}:${att.index}`, att.content, { expirationTtl: ttl });
+  }
+
+  async loadAttachment(mailId: string, index: number): Promise<ArrayBuffer | null> {
+    const value = await this.db.get(`Att:${mailId}:${index}`, 'arrayBuffer');
+    return value ?? null;
   }
 
   async messageIDToMailID(id: string): Promise<string | null> {

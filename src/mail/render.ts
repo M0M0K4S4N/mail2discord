@@ -1,6 +1,7 @@
 import type { DiscordActionRow, DiscordEmbed, DiscordMessagePayload, EmailCache, Environment } from '../types';
 import { EMBED_COLOR_MAIL } from '../discord/api';
 import { checkAddressStatus } from './check';
+import { formatBytes, markdownSafeName } from './attachments';
 import { summarizedByOpenAI, summarizedByWorkerAI } from './summarization';
 
 export const DISCORD_EMBED_LIMIT = 4096;
@@ -39,6 +40,33 @@ export async function renderEmailListMode(mail: EmailCache, env: Environment): P
     ],
     footer: { text: `Message-ID: ${mail.messageId.slice(0, 64)}` },
   };
+
+  // Attachments: metadata summary + download links when a domain is configured
+  const atts = mail.attachments || [];
+  if (atts.length) {
+    const lines = atts.map((att, i) => {
+      const size = formatBytes(att.size);
+      const name = markdownSafeName(att.filename);
+      return DOMAIN
+        ? `- [${name}](${`https://${DOMAIN}/email/${mail.id}?att=${i}`}) (${size})`
+        : `- \`${name}\` (${size})`;
+    });
+    embed.fields!.push({ name: `📎 Attachments (${atts.length})`, value: lines.join('\n').slice(0, 1024) });
+  }
+  const skipped = mail.skippedAttachments || [];
+  if (skipped.length) {
+    const reasonText: Record<string, string> = {
+      inline: 'inline (not stored)',
+      too_large: 'too large',
+      too_many: 'limit reached',
+      empty: 'empty',
+    };
+    const lines = skipped.map(s => `- \`${markdownSafeName(s.filename)}\` — ${reasonText[s.reason] || s.reason} (${formatBytes(s.size)})`);
+    embed.fields!.push({ name: `📎 Skipped (${skipped.length})`, value: lines.join('\n').slice(0, 1024) });
+  }
+  if (mail.truncated) {
+    embed.fields!.push({ name: '⚠️ Truncated', value: 'The raw email exceeded MAX_EMAIL_SIZE — attachments below may be incomplete.' });
+  }
 
   // Optional: inline body preview in the embed itself
   if (env.SHOW_BODY === 'true') {
@@ -115,7 +143,9 @@ export async function renderEmailSummaryMode(mail: EmailCache, env: Environment)
     SUMMARY_TARGET_LANG = 'english',
   } = env;
 
-  const prompt = `Summarize the following email in approximately 50 words in ${SUMMARY_TARGET_LANG}.\n\nFrom: ${mail.from}\nSubject: ${mail.subject}\n\n${mail.text || mail.html || ''}`;
+  const attachmentLines = (mail.attachments || []).map(a => `- ${a.filename} (${a.mimeType}, ${formatBytes(a.size)})`);
+  const attachmentSection = attachmentLines.length ? `\nAttachments:\n${attachmentLines.join('\n')}\n` : '';
+  const prompt = `Summarize the following email in approximately 50 words in ${SUMMARY_TARGET_LANG}.\n\nFrom: ${mail.from}\nSubject: ${mail.subject}\n${attachmentSection}\n${mail.text || mail.html || ''}`;
   let summary: string;
   try {
     if (AI && WORKERS_AI_MODEL) {

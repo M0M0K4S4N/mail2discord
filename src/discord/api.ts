@@ -54,6 +54,65 @@ export async function executeWebhook(
   return await res.json();
 }
 
+export interface DiscordUploadFile {
+  name: string;
+  content: ArrayBuffer;
+  contentType?: string;
+}
+
+/** Build the multipart body for a message with file uploads. */
+export function buildMultipartBody(payload: DiscordMessagePayload, files: DiscordUploadFile[]): FormData {
+  const form = new FormData();
+  form.append('payload_json', JSON.stringify({
+    allowed_mentions: { parse: [] },
+    ...payload,
+  }));
+  files.forEach((file, i) => {
+    form.append(
+      `files[${i}]`,
+      new Blob([file.content], { type: file.contentType || 'application/octet-stream' }),
+      file.name,
+    );
+  });
+  return form;
+}
+
+/** Send a message with file attachments to a channel using the bot token. */
+export async function createChannelMessageWithFiles(
+  token: string,
+  channelId: string,
+  payload: DiscordMessagePayload,
+  files: DiscordUploadFile[],
+): Promise<{ id: string }> {
+  // No Content-Type header — the runtime sets the multipart boundary itself.
+  const res = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bot ${token}` },
+    body: buildMultipartBody(payload, files),
+  });
+  if (!res.ok) {
+    throw new Error(`Discord createChannelMessageWithFiles failed: ${res.status} ${await res.text()}`);
+  }
+  return await res.json();
+}
+
+/** Execute a webhook with file attachments (simplified mode). */
+export async function executeWebhookWithFiles(
+  webhookUrl: string,
+  payload: DiscordMessagePayload,
+  files: DiscordUploadFile[],
+): Promise<{ id: string }> {
+  const url = webhookUrl.endsWith('?wait=true') ? webhookUrl : `${webhookUrl}?wait=true`;
+  const res = await fetch(url, {
+    method: 'POST',
+    body: buildMultipartBody(payload, files),
+  });
+  if (!res.ok) {
+    throw new Error(`Discord executeWebhookWithFiles failed: ${res.status} ${await res.text()}`);
+  }
+  return await res.json();
+}
+
 /** Register global application (slash) commands. Returns the app id used. */
 export async function registerApplicationCommands(token: string): Promise<{ application_id: string; commands: unknown[] }> {
   const meRes = await discordFetch(token, '/oauth2/applications/@me');

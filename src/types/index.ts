@@ -13,6 +13,31 @@ export interface EmailCache {
   subject: string;
   html?: string;
   text?: string;
+  /** Attachment metadata (content stored separately in KV) */
+  attachments?: EmailAttachmentMeta[];
+  /** Attachments that were deliberately not stored, with the reason */
+  skippedAttachments?: SkippedAttachment[];
+  /** True when the raw email exceeded MAX_EMAIL_SIZE and was truncated */
+  truncated?: boolean;
+}
+
+export interface EmailAttachmentMeta {
+  filename: string;
+  mimeType: string;
+  disposition: 'attachment' | 'inline' | null;
+  size: number;
+  /** Content-ID of an inline part, without angle brackets */
+  contentId?: string;
+}
+
+export interface StoredAttachment extends EmailAttachmentMeta {
+  /** Index into EmailCache.attachments — used as the KV/download key */
+  index: number;
+  content: ArrayBuffer;
+}
+
+export interface SkippedAttachment extends EmailAttachmentMeta {
+  reason: 'inline' | 'too_large' | 'too_many' | 'empty';
 }
 
 export type MaxEmailSizePolicy = 'unhandled' | 'continue' | 'truncate';
@@ -54,6 +79,14 @@ export interface Environment {
   MAX_EMAIL_SIZE?: string;
   /** unhandled | truncate | continue. Default: truncate */
   MAX_EMAIL_SIZE_POLICY?: MaxEmailSizePolicy;
+  /** Set 'false' to drop attachments entirely (metadata only). Default: true */
+  ATTACHMENTS?: string;
+  /** Max bytes per stored attachment. Default: 8 MiB */
+  MAX_ATTACHMENT_SIZE?: string;
+  /** Max number of stored attachments per mail. Default: 10 */
+  MAX_ATTACHMENT_COUNT?: string;
+  /** Set 'true' to upload attachments as Discord files alongside the notification. Default: false */
+  DISCORD_UPLOAD_ATTACHMENTS?: string;
   /** OpenAI-compatible API key for email summarization */
   OPENAI_API_KEY?: string;
   /** Default: https://api.openai.com/v1/chat/completions */

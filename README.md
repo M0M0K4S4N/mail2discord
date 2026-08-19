@@ -91,6 +91,7 @@ Location: Workers & Pages → your worker → Settings → Variables
 | `WHITE_LIST` | JSON array of addresses/regex; whitelist always wins |
 | `BLOCK_POLICY` | `reject,forward,discord` — comma-separated actions for blocked mail. Default `discord` |
 | `MAIL_TTL` | Cache TTL seconds (default `86400`); after expiry, view links die |
+| `LINK_TOKEN_SECRET` | When set, email view links are HMAC-signed (`?t=…`) — requests without a valid token get 404 |
 | `MAX_EMAIL_SIZE` | Bytes; larger mail hits `MAX_EMAIL_SIZE_POLICY` (default `524288`) |
 | `MAX_EMAIL_SIZE_POLICY` | `unhandled` / `truncate` / `continue` (default `truncate`) |
 | `WORKERS_AI_MODEL` | e.g. `@cf/meta/llama-3.1-8b-instruct`; needs the `AI` binding |

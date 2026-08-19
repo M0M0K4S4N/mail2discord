@@ -2,6 +2,7 @@ import type { DiscordActionRow, DiscordEmbed, DiscordMessagePayload, EmailCache,
 import { EMBED_COLOR_MAIL } from '../discord/api';
 import { checkAddressStatus } from './check';
 import { summarizedByOpenAI, summarizedByWorkerAI } from './summarization';
+import { signMailToken } from './link-token';
 
 export const DISCORD_EMBED_LIMIT = 4096;
 
@@ -32,6 +33,17 @@ export function trimToEmbedLimit(text: string, limit: number = DISCORD_EMBED_LIM
     return text;
   }
   return `${text.slice(0, limit - 15)}\n[...]`;
+}
+
+/** Build the /email/:id URL for a mail, signing it when LINK_TOKEN_SECRET is set. */
+export async function buildMailLink(env: Environment, mailId: string, mode: string): Promise<string> {
+  const { DOMAIN, LINK_TOKEN_SECRET } = env;
+  const base = `https://${DOMAIN}/email/${mailId}?mode=${mode}`;
+  if (!LINK_TOKEN_SECRET) {
+    return base;
+  }
+  const token = await signMailToken(LINK_TOKEN_SECRET, mailId);
+  return `${base}&t=${token}`;
 }
 
 /** Render the notification message (embed + buttons) for a parsed email. */
@@ -70,14 +82,14 @@ export async function renderEmailListMode(mail: EmailCache, env: Environment): P
   }
   // Optional: preview URL as a plain link in the embed (webhook mode — no button needed)
   if (!interactive && env.SHOW_PREVIEW_URL === 'true' && DOMAIN) {
-    embed.url = `https://${DOMAIN}/email/${mail.id}?mode=preview`;
+    embed.url = await buildMailLink(env, mail.id, 'preview');
     embed.fields!.push({ name: 'Preview', value: `[Open in browser ↗](${embed.url})` });
   }
   if (mail.text && DOMAIN) {
-    buttons.push({ type: 2, style: 5, label: 'Text', url: `https://${DOMAIN}/email/${mail.id}?mode=text` });
+    buttons.push({ type: 2, style: 5, label: 'Text', url: await buildMailLink(env, mail.id, 'text') });
   }
   if (mail.html && DOMAIN) {
-    buttons.push({ type: 2, style: 5, label: 'HTML', url: `https://${DOMAIN}/email/${mail.id}?mode=html` });
+    buttons.push({ type: 2, style: 5, label: 'HTML', url: await buildMailLink(env, mail.id, 'html') });
   }
   if (interactive && DEBUG === 'true') {
     buttons.push({ type: 2, style: 2, label: 'Debug', custom_id: `d:${mail.id}` });

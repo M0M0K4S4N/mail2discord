@@ -1,6 +1,7 @@
 import type { DiscordInteraction, EmailCache, Environment, DiscordMessagePayload } from '../../types';
 import { Dao } from '../../db';
 import { checkAddressStatus } from '../../mail/check';
+import { verifyMailToken, signMailToken } from '../../mail/link-token';
 import { renderEmailDebugMode, renderEmailListMode, renderEmailPreviewMode, renderEmailSummaryMode } from '../../mail/render';
 import { editInteractionOriginal, registerApplicationCommands, fetchBotUser } from '../../discord/api';
 import { verifyDiscordSignature } from '../../discord/verify';
@@ -200,14 +201,19 @@ export async function emailViewHandler(request: Request, env: Environment, id: s
   if (!mail) {
     return new Response('Email not found or expired (MAIL_TTL).', { status: 404 });
   }
-  const mode = new URL(request.url).searchParams.get('mode') || 'text';
+  // Signed-link gate: when LINK_TOKEN_SECRET is set, ?t= must match HMAC(secret, id).
+  const url = new URL(request.url);
+  if (env.LINK_TOKEN_SECRET && !(await verifyMailToken(env.LINK_TOKEN_SECRET, id, url.searchParams.get('t')))) {
+    return new Response('Invalid or missing link token.', { status: 404 });
+  }
+  const mode = url.searchParams.get('mode') || 'text';
   if (mode === 'html') {
     return new Response(wrapHtml(mail), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
   if (mode === 'preview') {
-    return new Response(wrapPreview(mail), {
+    return new Response(await wrapPreview(mail, env), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
@@ -222,10 +228,17 @@ function escapeHtml(s: string): string {
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
-function wrapPreview(mail: EmailCache): string {
+/** Signed token for mode-switch links inside the preview page. */
+async function tokenOf(mailId: string, env: Environment): Promise<string> {
+  return signMailToken(env.LINK_TOKEN_SECRET!, mailId);
+}
+
+async function wrapPreview(mail: EmailCache, env: Environment): Promise<string> {
   const body = escapeHtml(mail.text || 'No text content');
-  const htmlLink = mail.html ? `?mode=html` : '';
-  const textLink = `?mode=text`;
+  // Keep the ?t= token when switching modes so the gate keeps passing
+  const tokenQ = env.LINK_TOKEN_SECRET ? `&t=${await tokenOf(mail.id, env)}` : '';
+  const htmlLink = mail.html ? `?mode=html${tokenQ}` : '';
+  const textLink = `?mode=text${tokenQ}`;
   return `<!DOCTYPE html>
 <html lang="th">
 <head>

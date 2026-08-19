@@ -4,8 +4,8 @@ Security improvements reviewed but not yet implemented (decided to do performanc
 
 ## Security
 
-- [ ] **Signed email links** — `/email/:id` is public: anyone with the URL can read the mail
-      (OTP / reset links!). Add an HMAC token to the link (`LINK_TOKEN_SECRET` env), 404 without it.
+- [x] **Signed email links** — DONE in this branch: `/email/:id` links now carry `?t=<HMAC-SHA256(secret, mailId)>`
+      when `LINK_TOKEN_SECRET` is set; bad/missing token → 404. Unset = previous behavior.
 - [ ] **Real delete** — the Delete button only hides the Discord message; the KV cache lives until
       `MAIL_TTL`. Purge `Mail:<id>` via `ctx.waitUntil` on delete. (When merging `feat/attachments`,
       also purge `Att:<id>:*`.)

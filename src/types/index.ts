@@ -48,6 +48,8 @@ export interface Environment {
   SHOW_BODY_MAX_CHARS?: string;
   /** Show a preview URL link (web reading page) in the embed for webhook mode. Default: false */
   SHOW_PREVIEW_URL?: string;
+  /** When set, /email/:id links carry ?t=<HMAC(secret, mailId)> and reject bad tokens */
+  LINK_TOKEN_SECRET?: string;
   /** Workers domain, e.g. project.account.workers.dev */
   DOMAIN?: string;
   /** Max email size in bytes. Default: 512*1024 */

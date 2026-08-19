@@ -84,11 +84,12 @@ export async function emailHandler(message: ForwardableEmailMessage, env: Enviro
       const maxSize = Number.parseInt(MAX_EMAIL_SIZE || '', 10) || 512 * 1024;
       const maxSizePolicy = MAX_EMAIL_SIZE_POLICY || 'truncate';
       const mail = await parseEmail(message, maxSize, maxSizePolicy);
-      await dao.saveMailCache(mail.id, mail, ttl);
       const msgIDs = await sendMailToDiscord(mail, env);
-      for (const msgID of msgIDs) {
-        await dao.saveMessageIDToMailID(`${msgID}`, mail.id, ttl);
-      }
+      // Independent KV keys — write them in parallel instead of sequentially
+      await Promise.all([
+        dao.saveMailCache(mail.id, mail, ttl),
+        ...msgIDs.map(msgID => dao.saveMessageIDToMailID(`${msgID}`, mail.id, ttl)),
+      ]);
     }
     if (isGuardian) {
       status.discord = true;

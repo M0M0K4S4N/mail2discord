@@ -1,5 +1,6 @@
 import type { KVNamespace } from '@cloudflare/workers-types';
 import type { EmailCache, EmailHandleStatus } from '../types';
+import { invalidateListCache } from '../mail/list-cache';
 
 export type AddressListStoreKey = 'BLOCK_LIST' | 'WHITE_LIST';
 
@@ -29,6 +30,7 @@ export class Dao {
     if (!list.includes(address)) {
       list.unshift(address);
       await this.saveArrayToDB(type, list);
+      invalidateListCache(this.db);
     }
   }
 
@@ -36,6 +38,7 @@ export class Dao {
     const list = await this.loadArrayFromDB(type);
     const result = list.filter(item => item !== address);
     await this.saveArrayToDB(type, result);
+    invalidateListCache(this.db);
   }
 
   async loadMailStatus(id: string, guardian: boolean): Promise<EmailHandleStatus> {

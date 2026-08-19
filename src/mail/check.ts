@@ -1,7 +1,10 @@
 import type { Environment } from '../types';
 import { Dao, loadArrayFromRaw } from '../db';
+import { getCachedLists, invalidateListCache, setCachedLists } from './list-cache';
 
 export type AddressCheckStatus = 'white' | 'block' | 'no_match';
+
+export { invalidateListCache };
 
 export function testAddress(address: string, pattern: string): boolean {
   if (pattern.toLowerCase() === address.toLowerCase()) {
@@ -27,25 +30,32 @@ function matchAddress(list: string[], address: string): boolean {
   return false;
 }
 
+async function loadLists(env: Environment): Promise<{ block: string[]; white: string[] }> {
+  const envBlock = loadArrayFromRaw(env.BLOCK_LIST);
+  const envWhite = loadArrayFromRaw(env.WHITE_LIST);
+  if (env.DISABLE_LOAD_REGEX_FROM_DB === 'true' || !env.DB) {
+    return { block: envBlock, white: envWhite };
+  }
+  // env lists are cheap and may change on deploy — always merge them in
+  const cached = getCachedLists(env.DB);
+  if (cached) {
+    return { block: [...envBlock, ...cached.block], white: [...envWhite, ...cached.white] };
+  }
+  const dao = new Dao(env.DB);
+  const [dbBlock, dbWhite] = await Promise.all([
+    dao.loadArrayFromDB('BLOCK_LIST'),
+    dao.loadArrayFromDB('WHITE_LIST'),
+  ]);
+  setCachedLists(env.DB, dbBlock, dbWhite);
+  return { block: [...envBlock, ...dbBlock], white: [...envWhite, ...dbWhite] };
+}
+
 export async function checkAddressStatus(
   addresses: string[],
   env: Environment,
 ): Promise<{ [key: string]: AddressCheckStatus }> {
-  const {
-    BLOCK_LIST,
-    WHITE_LIST,
-    DISABLE_LOAD_REGEX_FROM_DB,
-    DB,
-  } = env;
-  const blockList = loadArrayFromRaw(BLOCK_LIST);
-  const whiteList = loadArrayFromRaw(WHITE_LIST);
-  if (!(DISABLE_LOAD_REGEX_FROM_DB === 'true')) {
-    const dao = new Dao(DB);
-    blockList.push(...(await dao.loadArrayFromDB('BLOCK_LIST')));
-    whiteList.push(...(await dao.loadArrayFromDB('WHITE_LIST')));
-  }
+  const { block: blockList, white: whiteList } = await loadLists(env);
   const result: { [key: string]: AddressCheckStatus } = {};
-
   for (const addr of addresses) {
     if (!addr) {
       continue;

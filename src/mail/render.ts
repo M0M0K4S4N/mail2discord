@@ -16,6 +16,16 @@ export function summarizeProvider(env: Environment): 'workers-ai' | 'openai' | n
   return null;
 }
 
+/** Cap the mail body fed to the summary prompt — a 50-word summary does not
+ *  need megabytes of text, and long prompts cost tokens and latency. */
+export const SUMMARY_PROMPT_BODY_LIMIT = 8 * 1024;
+
+export function buildSummaryPrompt(mail: EmailCache, targetLang: string): string {
+  const body = (mail.text || mail.html || '').slice(0, SUMMARY_PROMPT_BODY_LIMIT);
+  const truncated = (mail.text || mail.html || '').length > SUMMARY_PROMPT_BODY_LIMIT;
+  return `Summarize the following email in approximately 50 words in ${targetLang}.\n\nFrom: ${mail.from}\nSubject: ${mail.subject}\n\n${body}${truncated ? '\n\n[The email body was truncated for this summary.]' : ''}`;
+}
+
 /** Trim text to fit a Discord embed description, appending an ellipsis marker. */
 export function trimToEmbedLimit(text: string, limit: number = DISCORD_EMBED_LIMIT): string {
   if (text.length <= limit) {
@@ -115,7 +125,7 @@ export async function renderEmailSummaryMode(mail: EmailCache, env: Environment)
     SUMMARY_TARGET_LANG = 'english',
   } = env;
 
-  const prompt = `Summarize the following email in approximately 50 words in ${SUMMARY_TARGET_LANG}.\n\nFrom: ${mail.from}\nSubject: ${mail.subject}\n\n${mail.text || mail.html || ''}`;
+  const prompt = buildSummaryPrompt(mail, SUMMARY_TARGET_LANG);
   let summary: string;
   try {
     if (AI && WORKERS_AI_MODEL) {

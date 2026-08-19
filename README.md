@@ -1,5 +1,8 @@
 # mail2discord
 
+> [!NOTE]
+> The `feat/attachments` branch adds attachment handling (KV storage, download links, Discord upload). It is **not deployed** and **not merged to `main`** — production still runs the `main` branch without attachment support. See [Attachments](#attachments) for details.
+
 Use a Discord bot (or plain webhook) to get your temporary email.
 
 `mail2discord` is a [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/) Worker that converts incoming emails into rich Discord messages — a Discord-flavored take on [TBXark/mail2telegram](https://github.com/TBXark/mail2telegram), written from scratch.
@@ -135,6 +138,9 @@ List rules: whitelist wins over blocklist; entries match exact (case-insensitive
 - Links die after `MAIL_TTL` seconds — use `FORWARD_LIST` for anything you need to keep
 
 ## Attachments
+
+> [!WARNING]
+> This section applies to the `feat/attachments` branch only. On `main` (deployed), attachments are not supported — forward mail to a real inbox via `FORWARD_LIST` if you need them.
 
 Attachments are extracted (postal-mime) and stored per-mail in KV alongside the cache:
 
